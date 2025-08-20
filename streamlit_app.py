@@ -1,53 +1,61 @@
 import streamlit as st
+import base64
+import json
+
 from openai import OpenAI
 
-# Show title and description.
 st.title("📄 Document question answering")
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer! "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-)
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+openai_api_key = st.secrets["openai_api_key"]
+client = OpenAI(api_key=openai_api_key)
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "gpt-5-nano"
 
-    # Let the user upload a file via `st.file_uploader`.
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    # Ask the user for a question via `st.text_area`.
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
-    )
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    if uploaded_file and question:
+if prompt_dict := st.chat_input("Câu hỏi về file:", accept_file=True, file_type="json"):
+    prompt = prompt_dict["text"]
+    init_prompt = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ]
+        }
 
-        # Process the uploaded file and question.
-        document = uploaded_file.read().decode()
-        messages = [
+    if len(uploaded_file_list := prompt_dict["files"]) == 1:
+        uploaded_file = uploaded_file_list[0]
+        document = json.dumps(json.load(uploaded_file))
+
+        st.session_state.messages.append(
             {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
+                "role": "developer",
+                "content": f"Extract information from the following json and answer questions: {document}"
             }
-        ]
-
-        # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
         )
 
-        # Stream the response to the app using `st.write_stream`.
-        st.write_stream(stream)
+    st.session_state.messages.append(init_prompt)
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        stream = client.chat.completions.create(
+            model=st.session_state["openai_model"],
+            messages=[
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages
+            ],
+            stream=True,
+        )
+        response = st.write_stream(stream)
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
