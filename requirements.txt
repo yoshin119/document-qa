@@ -1,2 +1,8 @@
 streamlit
 openai
+langchain
+langchain_community
+langchain-postgres
+langchain-openai
+psycopg[binary,pool]
+pypdf
