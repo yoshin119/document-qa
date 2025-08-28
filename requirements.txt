@@ -4,5 +4,8 @@ langchain
 langchain_community
 langchain-postgres
 langchain-openai
+llama-cloud-services
 psycopg[binary,pool]
 pypdf
+unstructured[md]
+nltk
